@@ -178,7 +178,7 @@ impl SetInner {
         match (self, other) {
             (Self::Empty, _) => true,
             (_, Self::Empty) => false,
-            (Self::Small(a), Self::Small(b)) => a.is_subset(&**b),
+            (Self::Small(a), Self::Small(b)) => a.is_subset(b),
             (Self::Small(a), Self::Large(b_segments)) => {
                 // Assume b_segments is not empty if it's Large
                 a.is_subset(&**unsafe { b_segments.get_unchecked(0) })
@@ -191,7 +191,7 @@ impl SetInner {
                 a_segments
                     .iter()
                     .zip(b_segments.iter())
-                    .all(|(a, b)| a.is_subset(&**b))
+                    .all(|(a, b)| a.is_subset(b))
             }
         }
     }
@@ -290,6 +290,16 @@ impl SrbSet {
     #[inline]
     pub const fn new() -> Self {
         Self(SetInner::Empty)
+    }
+
+    /// Creates a SrbSet based on an already sorted and unique indices vec.
+    ///
+    /// # Safety
+    /// User of this function must ensure that the vec is sorted and deduplicated.
+    #[inline]
+    pub unsafe fn from_sorted_dedup_vec_unchecked(vec: Vec<usize>) -> Self {
+        debug_assert!(is_sorted_order(&vec), "vec not in sorted order");
+        Self(SetInner::from_sorted_dedup_vec(vec))
     }
 
     #[inline]
@@ -512,6 +522,13 @@ fn empty_roaring_arc() -> &'static Arc<RoaringBitmap> {
     CELL.get_or_init(|| Arc::new(RoaringBitmap::new()))
 }
 
+fn is_sorted_order(s: &[usize]) -> bool {
+    let mut iterb = s.iter();
+    iterb.next();
+
+    s.iter().zip(iterb).all(|(a, b)| a < b)
+}
+
 fn unisect_arc(
     a: &Arc<RoaringBitmap>,
     b: &Arc<RoaringBitmap>,
@@ -697,5 +714,104 @@ mod tests {
         assert_eq!(result_diff, expected_diff);
         assert!(result_diff.is_subset(&large_set_a));
         assert!(!large_set_a.is_subset(&result_diff)); // large_set_a has '2', result_diff does not
+    }
+
+    // Test Case 1: Empty Slice
+    #[test]
+    fn test_empty_slice() {
+        let s: &[usize] = &[];
+        assert_eq!(
+            is_sorted_order(s),
+            true,
+            "Empty slice should be considered sorted."
+        );
+    }
+
+    // Test Case 2: Single Element Slice
+    #[test]
+    fn test_single_element_slice() {
+        let s = &[5];
+        assert_eq!(
+            is_sorted_order(s),
+            true,
+            "Single-element slice should be considered sorted."
+        );
+    }
+
+    // Test Case 3: Strictly Sorted Slice
+    #[test]
+    fn test_strictly_sorted_slice() {
+        let s = &[1, 2, 3, 4, 5];
+        assert_eq!(
+            is_sorted_order(s),
+            true,
+            "Strictly sorted slice should return true."
+        );
+    }
+
+    // Test Case 4: Slice with Duplicate Elements
+    #[test]
+    fn test_duplicate_elements() {
+        let s = &[1, 2, 2, 3, 4];
+        assert_eq!(
+            is_sorted_order(s),
+            false,
+            "Slice with duplicates should return false."
+        );
+    }
+
+    // Test Case 5: Slice in Descending Order
+    #[test]
+    fn test_descending_order() {
+        let s = &[5, 4, 3, 2, 1];
+        assert_eq!(
+            is_sorted_order(s),
+            false,
+            "Descending slice should return false."
+        );
+    }
+
+    // Test Case 6: Slice with Mixed Unsorted Elements
+    #[test]
+    fn test_mixed_unsorted_elements() {
+        let s = &[1, 3, 2, 4];
+        assert_eq!(
+            is_sorted_order(s),
+            false,
+            "Mixed unsorted slice should return false."
+        );
+    }
+
+    // Test Case 7: Two Elements, Sorted
+    #[test]
+    fn test_two_elements_sorted() {
+        let s = &[10, 20];
+        assert_eq!(
+            is_sorted_order(s),
+            true,
+            "Two sorted elements should return true."
+        );
+    }
+
+    // Test Case 8: Two Elements, Unsorted
+    #[test]
+    fn test_two_elements_unsorted() {
+        let s = &[20, 10];
+        assert_eq!(
+            is_sorted_order(s),
+            false,
+            "Two unsorted elements should return false."
+        );
+    }
+
+    // Test Case 9: All Elements Are The Same
+    #[test]
+    fn test_all_same_elements() {
+        let s = &[7, 7, 7];
+        assert_eq!(
+            is_sorted_order(s),
+            false,
+            "Slice with all identical elements should return false."
+        );
     }
 }
