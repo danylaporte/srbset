@@ -91,6 +91,13 @@ impl SetInner {
         }
     }
 
+    fn from_unsorted_vec(mut vec: Vec<usize>) -> Self {
+        vec.sort_unstable();
+        vec.dedup();
+
+        Self::from_sorted_dedup_vec(vec)
+    }
+
     fn contains(&self, index: usize) -> bool {
         match self {
             Self::Empty => false,
@@ -300,6 +307,11 @@ impl SrbSet {
     pub unsafe fn from_sorted_dedup_vec_unchecked(vec: Vec<usize>) -> Self {
         debug_assert!(is_sorted_order(&vec), "vec not in sorted order");
         Self(SetInner::from_sorted_dedup_vec(vec))
+    }
+
+    #[inline]
+    pub fn from_unsorted_vec(vec: Vec<usize>) -> Self {
+        Self(SetInner::from_unsorted_vec(vec))
     }
 
     #[inline]
